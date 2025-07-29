@@ -26,5 +26,26 @@ cfo = cf.CSIFilter(data_dir="pcaps/CSI_nowall_static1.pcap", save_dir="pcaps", m
 cfo.rssi_filter()
 cfo.save_csv(data_fname="csi_datastop.csv", meta_fname="csi_metadatastop.csv")
 cfo.calculate_doppler_shift_per_frame(cfo.calculate_doppler_shift(), "cdfpsstop.csv")
-cfo.calculate_doppler_shift_per_frame_pca(cfo.calculate_doppler_shift(), "cdspfsstop.csv")
+cfo.calculate_doppler_shift_per_frame_pca(cfo.calculate_doppler_shift(), "cdspfsstoppca.csv")
+
+del cfo
+gc.collect()
+
+cfo = cf.CSIFilter(data_dir="pcaps/CSI_nowall_static2.pcap", save_dir="pcaps", mode="raw")
+cfo.rssi_filter()
+cfo.save_csv(data_fname="csi_datastop2.csv", meta_fname="csi_metadatastop2.csv")
+cfo.calculate_doppler_shift_per_frame(cfo.calculate_doppler_shift(), "cdfpsstop2.csv")
+cfo.calculate_doppler_shift_per_frame_pca(cfo.calculate_doppler_shift(), "cdspfsstop2pca.csv")
+
+
+del cfo
+gc.collect()
+
+cfo = cf.CSIFilter(data_dir="pcaps/CSI_nowall_moving1.pcap", save_dir="pcaps", mode="raw")
+cfo.rssi_filter()
+cfo.save_csv(data_fname="csi_datastop1.csv", meta_fname="csi_metadatastop1.csv")
+cfo.calculate_doppler_shift_per_frame(cfo.calculate_doppler_shift(), "cdfpsmoving1.csv")
+cfo.calculate_doppler_shift_per_frame_pca(cfo.calculate_doppler_shift(), "cdspfsmoving1pca.csv")
+
+
 
