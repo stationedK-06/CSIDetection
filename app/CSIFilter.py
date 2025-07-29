@@ -38,14 +38,18 @@ class CSIFilter:
     def __init__(self, data_dir, save_dir, mode="raw"):
         self.data_dir = data_dir
         self.save_dir = save_dir
+        #DataFrames to hold loaded data (pandas)
         self.loaded = None
         self.loaded_metadata = None
+        #numpy
+        self.unwrap = None
 
         if mode == "processed":
             self.loaded = self._load_processed(data_dir)
         elif mode == "raw":
-            self.loaded = self._load_and_process_raw(data_dir)
             self.loaded_metadata = self.load_metadata_pcap(data_dir)
+            self.loaded = self._load_and_process_raw(data_dir)
+            self.unwrap = self.csi_unwrap()
 
         else:
             raise ValueError("mode must be 'raw' or 'processed'")
@@ -99,8 +103,10 @@ class CSIFilter:
                         )
         # create a DataFrame from the records and save it as a csv file
         df = pd.DataFrame.from_records(records)
+        df_timestamp = self.loaded_metadata[['frame', 'timestamp']].drop_duplicates()
+        df_merged = pd.merge(df, df_timestamp, on='frame', how='left')
         # return the DataFrame
-        return df
+        return df_merged
 
     # method to load metadata from a pcap file
     def load_metadata_pcap(self, pcap_path=None):
@@ -136,7 +142,7 @@ class CSIFilter:
             rec["chip"] = getattr(frame, "chip", None)
             records.append(rec)
 
-        df_meta = pd.DataFrame.from_records(records).set_index("frame")
+        df_meta = pd.DataFrame.from_records(records)
         return df_meta
 
     # method to save data to a csv file
@@ -149,5 +155,50 @@ class CSIFilter:
         # save the loaded data to the csv file
         self.loaded.to_csv(data_path, index=True)
         self.loaded_metadata.to_csv(meta_path, index=True)
+
+    #rssi filter with Moving Average filter. (planning to change algoritm to kalman filter)
+    #creates new rssi_ma column in the loaded_metadata dataframe
+    def rssi_filter(self):
+        df = self.loaded_metadata
+        if self.loaded is None:
+            raise ValueError("No data loaded to apply RSSI filter")
+        # apply a simple moving average filter on the rssi column
+        window_size = 3
+        df['rssi_ma'] =  df['rssi'].rolling(window=window_size).mean()
+
+
+    # def csi_unwrap(self):
+    #     ctp = ['frame', 'subcarrier', 'amplitude', 'phase', 'real', 'imag', 'timestamp']
+    #     n_subcarriers = self.loaded['subcarrier'].nunique()
+    #     n_frames = self.loaded["frame"].nunique()
+    #     n_features = len(ctp)
+    #     arr3d = np.zeros((n_subcarriers, n_frames, n_features))
+    #     for subcarrier_id, group in self.loaded.groupby('subcarrier'):
+    #         group_data = group[ctp].to_numpy()
+    #         arr3d[subcarrier_id] = group_data
+        
+    #     print({arr3d.shape})
+    #     print("-" * 30)
+    #     print(arr3d)
+
+    def csi_unwrap(self):
+        features_to_keep = ['frame', 'subcarrier', 'amplitude', 'phase', 'real', 'imag', 'timestamp']
+        df_sorted = self.loaded.sort_values(by=['subcarrier', 'frame'])
+        feature_values = df_sorted[features_to_keep].to_numpy()
+        n_subcarriers = self.loaded['subcarrier'].nunique()
+        n_frames = self.loaded['frame'].nunique()
+        arr3d = feature_values.reshape((n_subcarriers, n_frames, len(features_to_keep)))
+        phase_index = features_to_keep.index('phase')
+        phase_data = arr3d[:, :, phase_index]
+        unwrapped_phase = np.unwrap(phase_data, axis=1)
+        arr3d[:, :, phase_index] = unwrapped_phase
+        self.unwrap = arr3d
+
+        # Select the 1D array of unwrapped phase for subcarrier 0
+        subcarrier_0_unwrapped_phase = arr3d[3, :, phase_index]
+
+        # Print the entire array at once
+        print(subcarrier_0_unwrapped_phase) 
+        return arr3d
 
     
