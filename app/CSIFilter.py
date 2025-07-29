@@ -216,20 +216,20 @@ class CSIFilter:
         doppler_shift = (1/(2* np.pi)) * dphase / dtime
         return doppler_shift
        
-    def calculate_doppler_shift_per_frame(self, doppler_shifts):
+    def calculate_doppler_shift_per_frame(self, doppler_shifts, name = 'per_frame_doppler_numpy.csv'):
         per_frame_motion_intensity = np.var(doppler_shifts, axis=0)
-        np.savetxt('per_frame_doppler_numpy.csv', 
+        np.savetxt(name, 
            per_frame_motion_intensity, 
            delimiter=',', 
            header='average_doppler_shift', 
            comments='')
         return per_frame_motion_intensity
     
-    def calculate_doppler_shift_per_frame_pca(self, doppler_shifts):
+    def calculate_doppler_shift_per_frame_pca(self, doppler_shifts, name = 'per_frame_doppler_numpypca.csv'):
         pca = PCA(n_components=1)
         # fit_transform은 주성분을 찾아 변환까지 수행
         per_frame_principal_motion = pca.fit_transform(doppler_shifts.T).flatten()
-        np.savetxt('per_frame_doppler_numpypca.csv', 
+        np.savetxt(name, 
            per_frame_principal_motion, 
            delimiter=',', 
            header='average_doppler_shift', 
