@@ -5,6 +5,8 @@ import pandas as pd
 from CSIKit.reader import get_reader
 from CSIKit.util.csitools import get_CSI
 import os
+from sklearn.decomposition import PCA
+
 
 
 # class : CSIFilter
@@ -193,12 +195,44 @@ class CSIFilter:
         unwrapped_phase = np.unwrap(phase_data, axis=1)
         arr3d[:, :, phase_index] = unwrapped_phase
         self.unwrap = arr3d
-
-        # Select the 1D array of unwrapped phase for subcarrier 0
-        subcarrier_0_unwrapped_phase = arr3d[3, :, phase_index]
-
-        # Print the entire array at once
-        print(subcarrier_0_unwrapped_phase) 
         return arr3d
 
+    def calculate_doppler_shift(self):
+        if self.unwrap is None:
+            raise ValueError("CSI data must be unwrapped before calculating Doppler shift")
+        
+        # Calculate the Doppler shift based on the unwrapped phase
+        features = ['frame', 'subcarrier', 'amplitude', 'phase', 'real', 'imag', 'timestamp']
+        phase_index = features.index('phase')
+        timestamp_index = features.index('timestamp')
+
+        unwrapped_phase = self.unwrap[:, :, phase_index]
+        timestamps = self.unwrap[0,:, timestamp_index]
+
+        dtime = np.diff(timestamps) / 1e6
+        dtime[dtime == 0] = np.finfo(float).eps
+
+        dphase = np.diff(unwrapped_phase, axis=1)
+        doppler_shift = (1/(2* np.pi)) * dphase / dtime
+        return doppler_shift
+       
+    def calculate_doppler_shift_per_frame(self, doppler_shifts):
+        per_frame_motion_intensity = np.var(doppler_shifts, axis=0)
+        np.savetxt('per_frame_doppler_numpy.csv', 
+           per_frame_motion_intensity, 
+           delimiter=',', 
+           header='average_doppler_shift', 
+           comments='')
+        return per_frame_motion_intensity
+    
+    def calculate_doppler_shift_per_frame_pca(self, doppler_shifts):
+        pca = PCA(n_components=1)
+        # fit_transform은 주성분을 찾아 변환까지 수행
+        per_frame_principal_motion = pca.fit_transform(doppler_shifts.T).flatten()
+        np.savetxt('per_frame_doppler_numpypca.csv', 
+           per_frame_principal_motion, 
+           delimiter=',', 
+           header='average_doppler_shift', 
+           comments='')
+        return per_frame_principal_motion
     
