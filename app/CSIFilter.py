@@ -6,6 +6,7 @@ from CSIKit.reader import get_reader
 from CSIKit.util.csitools import get_CSI
 import os
 from sklearn.decomposition import PCA
+from scipy.signal import savgol_filter
 
 
 
@@ -107,8 +108,16 @@ class CSIFilter:
         df = pd.DataFrame.from_records(records)
         df_timestamp = self.loaded_metadata[['frame', 'timestamp']].drop_duplicates()
         df_merged = pd.merge(df, df_timestamp, on='frame', how='left')
+        frames_to_remove = df_merged[df_merged['timestamp'] == 0]['frame'].unique()
+        if len(frames_to_remove) > 0:
+            print(f"Removing frames with timestamp 0: {frames_to_remove}")
+            
+            # 2. Keep only the rows where the frame number is NOT in the list to be removed.
+            df_cleaned = df_merged[~df_merged['frame'].isin(frames_to_remove)]
+        else:
+            df_cleaned = df_merged
         # return the DataFrame
-        return df_merged
+        return df_cleaned
 
     # method to load metadata from a pcap file
     def load_metadata_pcap(self, pcap_path=None):
@@ -184,6 +193,7 @@ class CSIFilter:
     #     print(arr3d)
 
     def csi_unwrap(self):
+        #target coloumns 
         features_to_keep = ['frame', 'subcarrier', 'amplitude', 'phase', 'real', 'imag', 'timestamp']
         df_sorted = self.loaded.sort_values(by=['subcarrier', 'frame'])
         feature_values = df_sorted[features_to_keep].to_numpy()
@@ -215,6 +225,28 @@ class CSIFilter:
         dphase = np.diff(unwrapped_phase, axis=1)
         doppler_shift = (1/(2* np.pi)) * dphase / dtime
         return doppler_shift
+    
+    def calculate_doppler_shift_savitzky_golay_filter(self):
+        if self.unwrap is None:
+            raise ValueError("CSI data must be unwrapped before calculating Doppler shift") 
+        features = ['frame', 'subcarrier', 'amplitude', 'phase', 'real', 'imag', 'timestamp']
+        phase_index = features.index('phase')
+        timestamp_index = features.index('timestamp')
+
+        unwrapped_phase = self.unwrap[:, :, phase_index]
+        timestamps = self.unwrap[0,:, timestamp_index]
+
+        window_length = 5
+        polyorder = 2
+        print(timestamps)
+        print(np.all(np.diff(timestamps) > 0))
+        avg_dtime = np.mean(np.diff(timestamps)) / 1e6
+        print(avg_dtime)
+        if avg_dtime <= 0:
+            raise ValueError("Average time difference must be greater than zero")
+        smoothed_derivative = savgol_filter(unwrapped_phase, window_length = window_length, polyorder = polyorder, axis=1, deriv=1, delta = avg_dtime)
+        doppler_shift = (1/(2* np.pi)) * smoothed_derivative
+        return doppler_shift
        
     def calculate_doppler_shift_per_frame(self, doppler_shifts, name = 'per_frame_doppler_numpy.csv'):
         per_frame_motion_intensity = np.var(doppler_shifts, axis=0)
@@ -227,7 +259,6 @@ class CSIFilter:
     
     def calculate_doppler_shift_per_frame_pca(self, doppler_shifts, name = 'per_frame_doppler_numpypca.csv'):
         pca = PCA(n_components=1)
-        # fit_transform은 주성분을 찾아 변환까지 수행
         per_frame_principal_motion = pca.fit_transform(doppler_shifts.T).flatten()
         np.savetxt(name, 
            per_frame_principal_motion, 
