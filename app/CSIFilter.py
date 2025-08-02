@@ -237,7 +237,7 @@ class CSIFilter:
         timestamps = self.unwrap[0,:, timestamp_index]
 
         window_length = 5
-        polyorder = 2
+        polyorder = 4
         print(timestamps)
         print(np.all(np.diff(timestamps) > 0))
         avg_dtime = np.mean(np.diff(timestamps)) / 1e6
